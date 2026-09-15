@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="pl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#2563eb" />
+    <!-- iOS: własny mechanizm instalacji standalone, manifest mu niepotrzebny -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="PWA Kit" />
+    <link rel="apple-touch-icon" href="icons/icon-192.png" />
+    <title>PWA Install Kit — demo</title>
+    <style>
+      :root { color-scheme: light dark; }
+      body {
+        margin: 0;
+        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+        background: #0d0f12;
+        color: #f2f3f5;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 32px 20px;
+        box-sizing: border-box;
+      }
+      h1 { font-size: 20px; margin: 16px 0 8px; text-align: center; }
+      p.lead { color: #9aa0a8; text-align: center; max-width: 360px; line-height: 1.5; }
+      .icon { width: 64px; height: 64px; border-radius: 16px; }
+      button {
+        margin-top: 20px;
+        padding: 14px 24px;
+        border-radius: 12px;
+        border: none;
+        background: #2563eb;
+        color: #fff;
+        font-size: 15px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      button:disabled { opacity: 0.5; cursor: default; }
+      .steps { text-align: left; max-width: 360px; margin-top: 16px; }
+      .steps div { margin-bottom: 8px; color: #d1d5db; }
+      .pill {
+        margin-top: 24px;
+        padding: 8px 14px;
+        border-radius: 999px;
+        background: #1a1d22;
+        font-size: 13px;
+        color: #9aa0a8;
+      }
+      .card {
+        margin-top: 16px;
+        padding: 16px;
+        border-radius: 12px;
+        background: #1a1d22;
+        max-width: 360px;
+        width: 100%;
+        box-sizing: border-box;
+      }
+      code { background: #1a1d22; padding: 2px 6px; border-radius: 4px; }
+    </style>
+  </head>
+  <body>
+    <div id="app">Ładowanie…</div>
+
+    <script type="module">
+      import {
+        isStandalone,
+        isIOS,
+        injectManifest,
+        registerServiceWorker,
+        createInstallController,
+      } from "./pwa-install-gate.js";
+
+      const app = document.getElementById("app");
+      const origin = location.href.split("?")[0].replace(/[^/]*$/, "");
+
+      // Manifest w trybie "blob" — ten demo nie ma backendu. W realnym
+      // projekcie z serwerem zamień na mode: "server", serverEndpoint: "...".
+      injectManifest({
+        mode: "blob",
+        startUrl: location.href,
+        name: "PWA Install Kit",
+        shortName: "PWA Kit",
+        themeColor: "#2563eb",
+        icons: [
+          { src: origin + "icons/icon-192.png", sizes: "192x192", type: "image/png" },
+          { src: origin + "icons/icon-512.png", sizes: "512x512", type: "image/png" },
+        ],
+      });
+
+      registerServiceWorker("sw.js");
+
+      const TOKEN_KEY = "pwa_kit_demo_token";
+
+      function renderInstalledScreen() {
+        let token = localStorage.getItem(TOKEN_KEY);
+        if (!token) {
+          token = crypto.randomUUID();
+          localStorage.setItem(TOKEN_KEY, JSON.stringify({ value: token, savedAt: Date.now() }));
+        }
+        const stored = JSON.parse(localStorage.getItem(TOKEN_KEY));
+        const days = ((Date.now() - stored.savedAt) / 86400000).toFixed(2);
+
+        app.innerHTML = `
+          <img class="icon" src="icons/icon-192.png" alt="" />
+          <h1>Zainstalowano ✓</h1>
+          <p class="lead">Tryb standalone wykryty poprawnie. Token zapisany lokalnie — sprawdź czy przetrwa 7 dni na iOS (ITP).</p>
+          <div class="card">
+            <div><b>Token:</b> <code>${stored.value.slice(0, 12)}…</code></div>
+            <div style="margin-top:6px"><b>Zapisany:</b> ${new Date(stored.savedAt).toLocaleString()}</div>
+            <div style="margin-top:6px"><b>Wiek:</b> ${days} dnia</div>
+          </div>
+          <button id="reset">Wyczyść token i zacznij od nowa</button>
+        `;
+        document.getElementById("reset").onclick = () => {
+          localStorage.removeItem(TOKEN_KEY);
+          renderInstalledScreen();
+        };
+      }
+
+      function renderGateScreen() {
+        if (isIOS()) {
+          app.innerHTML = `
+            <img class="icon" src="icons/icon-192.png" alt="" />
+            <h1>Zainstaluj, żeby kontynuować</h1>
+            <p class="lead">iOS nie ma programistycznego API instalacji — zrób to ręcznie:</p>
+            <div class="steps">
+              <div>1. Dotknij ikony <b>Udostępnij</b> na dole ekranu</div>
+              <div>2. Wybierz <b>Dodaj do ekranu głównego</b></div>
+              <div>3. Otwórz aplikację z nowej ikony</div>
+            </div>
+            <div class="pill">Czekam na instalację…</div>
+          `;
+          return;
+        }
+
+        app.innerHTML = `
+          <img class="icon" src="icons/icon-192.png" alt="" />
+          <h1>Zainstaluj, żeby kontynuować</h1>
+          <p class="lead">Android/Chrome/desktop — kliknij przycisk poniżej.</p>
+          <button id="install" disabled>Czekam na gotowość…</button>
+          <p class="lead" style="margin-top:12px; font-size:13px;">
+            Jeśli przycisk długo nic nie robi: Chrome wymaga ok. 20-30s
+            zaangażowania na stronie + jednego dotknięcia, zanim w ogóle
+            pozwoli zainstalować programistycznie. Możesz też ręcznie: menu
+            (⋮) → „Zainstaluj aplikację”.
+          </p>
+          <div class="pill">Czekam na instalację…</div>
+        `;
+
+        const btn = document.getElementById("install");
+        const controller = createInstallController({
+          onAvailable: () => {
+            btn.disabled = false;
+            btn.textContent = "Zainstaluj aplikację";
+          },
+          onUnavailable: () => {
+            btn.disabled = true;
+            btn.textContent = "Zainstalowano";
+          },
+        });
+        btn.onclick = () => controller.prompt();
+      }
+
+      function render() {
+        if (isStandalone()) renderInstalledScreen();
+        else renderGateScreen();
+      }
+
+      // display-mode może się zmienić w locie po instalacji (część przeglądarek
+      // odświeża media query bez przeładowania strony)
+      window.matchMedia("(display-mode: standalone)").addEventListener("change", render);
+      render();
+    </script>
+  </body>
+</html>
