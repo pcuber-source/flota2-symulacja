@@ -29,16 +29,32 @@
         var link = document.createElement("link");
         link.rel = "manifest";
         if ("true" === "true") {
-          // Tryb symulacji (bez backendu, patrz .env.mock) — jeden statyczny
-          // plik manifestu zamiast per-kodowego. UWAGA: manifest jako data:
-          // URI wygląda poprawnie (parsuje się, ikony się ładują), ale
-          // realnie NIE uruchamia beforeinstallprompt w Chrome (potwierdzone
-          // zgłoszeniami innych osób z tym samym problemem) — dlatego tu
-          // musi być prawdziwy, fetchowalny plik, nie data: URI. W trybie
-          // symulacji i tak nie ma prawdziwych jednorazowych kodów, więc
-          // jeden wspólny manifest wystarczy.
+          // Tryb symulacji (bez backendu, patrz .env.mock) — manifest budowany
+          // lokalnie w przeglądarce, per kod, jak w produkcji (start_url musi
+          // wskazywać na /rejestracja/<kod>, inaczej ikona po instalacji
+          // otwiera "/" i rejestracja nigdy się nie wykonuje — patrz CLAUDE.md).
+          // UWAGA: manifest jako data: URI wygląda poprawnie (parsuje się,
+          // ikony się ładują), ale realnie NIE uruchamia beforeinstallprompt
+          // w Chrome (potwierdzone zgłoszeniami innych z tym samym problemem)
+          // — dlatego Blob + URL.createObjectURL zamiast data:, to prawdziwy,
+          // fetchowalny zasób z tego samego originu.
           var appRoot = window.location.href.replace(/rejestracja\/.*/, "");
-          link.href = appRoot + "manifest.mock.json";
+          var manifest = {
+            id: appRoot + "rejestracja/" + kod,
+            name: "Flota 2.0 (symulacja)",
+            short_name: "Flota 2.0",
+            start_url: appRoot + "rejestracja/" + kod,
+            scope: appRoot,
+            display: "standalone",
+            background_color: "#0d0f12",
+            theme_color: "#0d0f12",
+            icons: [
+              { src: appRoot + "icons/icon-192.png", sizes: "192x192", type: "image/png" },
+              { src: appRoot + "icons/icon-512.png", sizes: "512x512", type: "image/png" },
+            ],
+          };
+          var blob = new Blob([JSON.stringify(manifest)], { type: "application/manifest+json" });
+          link.href = URL.createObjectURL(blob);
         } else {
           link.href = "/api/manifest/" + kod + ".webmanifest";
         }
