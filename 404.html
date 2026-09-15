@@ -61,7 +61,21 @@
         document.head.appendChild(link);
       })();
     </script>
-    <script type="module" crossorigin src="/flota2-symulacja/assets/index-DWDJqUA8.js"></script>
+    <script>
+      // Łapiemy beforeinstallprompt tu, jak najwcześniej, GLOBALNIE — nie w
+      // komponencie React. Zdarzenie odpala się tylko raz na wczytanie strony
+      // i jeśli nikt jeszcze nie słucha (np. React się jeszcze nie zamontował,
+      // albo w trybie symulacji czeka na PIN), przepada bezpowrotnie. Chrome
+      // może je wysłać niemal natychmiast, jeśli origin już ma wystarczające
+      // "zaangażowanie" z wcześniejszych wizyt — czekanie z rejestracją
+      // nasłuchu do momentu zamontowania InstallGate.tsx nie jest bezpieczne.
+      window.__deferredInstallPrompt = null;
+      window.addEventListener("beforeinstallprompt", function (e) {
+        e.preventDefault();
+        window.__deferredInstallPrompt = e;
+      });
+    </script>
+    <script type="module" crossorigin src="/flota2-symulacja/assets/index-C2PD6izR.js"></script>
     <link rel="stylesheet" crossorigin href="/flota2-symulacja/assets/index-CP5mZLhL.css">
   </head>
   <body>
