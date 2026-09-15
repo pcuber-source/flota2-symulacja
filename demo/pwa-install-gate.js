@@ -119,21 +119,46 @@ export function registerServiceWorker(swUrl) {
 }
 
 /**
+ * Wywołaj to JAK NAJWCZEŚNIEJ — najlepiej w inline <script> w <head>, PRZED
+ * jakimkolwiek frameworkiem/ekranem pośrednim (splash, auth check, gate).
+ * Patrz pułapka #4 w README: beforeinstallprompt odpala się tylko raz na
+ * wczytanie strony i jeśli nikt jeszcze nie słucha w tym momencie, przepada
+ * bezpowrotnie — zwłaszcza groźne, gdy origin ma już zaangażowanie z
+ * wcześniejszych wizyt (event może przyjść niemal natychmiast). Ta funkcja
+ * zapisuje złapany event do window, żeby createInstallController() (wywołane
+ * później, np. w komponencie) mógł go bezpiecznie odebrać nawet jeśli
+ * zdążył się odpalić wcześniej.
+ */
+export function earlyCapture() {
+  if (typeof window.__deferredInstallPrompt === "undefined") window.__deferredInstallPrompt = null;
+  window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault();
+    window.__deferredInstallPrompt = e;
+  });
+}
+
+/**
  * Łapie zdarzenie beforeinstallprompt i zwraca kontroler z funkcją prompt()
  * do wywołania na kliknięcie własnego przycisku instalacji w UI (Android/
  * desktop — iOS nie ma programistycznego API, patrz isIOS() i pokaż tam
  * ręczną instrukcję "Udostępnij" → "Dodaj do ekranu głównego").
+ *
+ * Jeśli Twoja apka ma ekran pośredni przed tym komponentem, wywołaj
+ * earlyCapture() osobno i jak najwcześniej (patrz jej JSDoc) — ta funkcja
+ * odbierze już złapany event z window, jeśli taki jest.
  *
  * @param {object} [callbacks]
  * @param {() => void} [callbacks.onAvailable] wywołane, gdy prompt jest gotowy do pokazania
  * @param {() => void} [callbacks.onUnavailable] wywołane po instalacji / zużyciu prompta
  */
 export function createInstallController({ onAvailable, onUnavailable } = {}) {
-  let deferredEvent = null;
+  let deferredEvent = window.__deferredInstallPrompt || null;
+  if (deferredEvent) onAvailable?.();
 
   window.addEventListener("beforeinstallprompt", (e) => {
     e.preventDefault();
     deferredEvent = e;
+    window.__deferredInstallPrompt = e;
     onAvailable?.();
   });
 
@@ -150,6 +175,7 @@ export function createInstallController({ onAvailable, onUnavailable } = {}) {
       deferredEvent.prompt();
       const choice = await deferredEvent.userChoice;
       deferredEvent = null;
+      window.__deferredInstallPrompt = null;
       return choice;
     },
   };
